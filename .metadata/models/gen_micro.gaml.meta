@@ -1,9 +1,9 @@
 #
-#Sun Sep 18 16:45:21 CEST 2016
-operators=-~as~envelope~+~.~rectangle~rgb~>\=~\=~and~or~<\=~poisson~<~>~min_of~max_of~internal_at~/~flip~length
+#Sun Sep 18 22:54:52 CEST 2016
+operators=-~as~envelope~+~.~\!~or~\=~rectangle~rgb~>\=~and~<\=~poisson~<~>~min_of~max_of~internal_at~/~flip~read~length
 plugins=msi.gama.core~ummisco.gama.opengl
 attributes=area
-statements=action~set~add~aspect~draw~init~let~arg~switch~match~return~reflex~if~else~loop~create~write~ask~do~output~display~display_grid~display_population
+statements=action~set~add~if~aspect~draw~init~let~arg~switch~match~return~reflex~else~loop~create~write~ask~do~output~display~display_grid~display_population
 skills=reflex~grid
 constants=black~white
 types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~container

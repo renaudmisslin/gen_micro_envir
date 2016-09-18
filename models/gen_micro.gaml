@@ -27,6 +27,7 @@ global {
 	list<geometry> espace_proche_routes;
 	geometry zone_chaussees;
 	geometry zone_proche_routes;
+	geometry espace_non_bati;
 	
 	// Initialisation
 	geometry shape <- envelope(grid_pop);
@@ -52,14 +53,21 @@ global {
 			self.pop_resid <- 0;
 		}
 		
-//		ask cell_ggmap {
-//			self.occsol <- int(self.grid_value);
-//			self.color <- color_occsol(self.occsol);
-//		}
+		/*ask cell_ggmap {
+			self.occsol <- int(self.grid_value);
+			self.color <- color_occsol(self.occsol);
+		}		
+		int cpt_ggmap <- 0;
+		ask cell_ggmap where (each.occsol != 2) {
+			espace_non_bati <- espace_non_bati + self.shape;
+			cpt_ggmap <- cpt_ggmap + 1;
+			write 'Aire des espace non bati' + espace_non_bati.area; 
+		}
+		*/
 		
 		// Initialisation des routes et des zones autour (chaussees et zones proches)
 		
-		create route from: shp_routes {
+		create route from: shp_routes with: [type::string(read("fclass")), pont::string(read("bridge")), tunnel::string(read("tunnel"))] {
 			do init_routes;
 		}
 		
@@ -155,31 +163,38 @@ grid cell_proba_bati file: grid_proba_bati use_regular_agents: false use_individ
 	rgb color_occsol(int m) {
 		switch m {
 			match 1 {
-				return rgb(220,220,220);
+				return rgb(220,220,220); // routes
 			}
 			match 2 {
-				return rgb(253,234,218);
+				return rgb(253,234,218); // espace libre
 			}
 			match 3 {
-				return rgb(85,142,220);
+				return rgb(85,142,220); // eau
 			}
 		}
 	}
-}
-*/
+}*/
+
 
 species route {
+	string type;
+	string pont;
+	string tunnel;
 	rgb color <- #black;
 	geometry chaussee;
 	geometry espace_proche_route;
 	list<geometry> segments;
 		
 	action init_routes {
-		// Inclure ici --> if je suis une petite route alors je fais ce qu'il y a en dessous
+		// Toutes les routes ont une chaussee (il faudrait enlever les tunnels ...)
 		chaussee <- self.shape + largeur_chaussee;
 		add chaussee to: chaussees;
-		espace_proche_route <- self.shape + largeur_espace_proche_route - chaussee;
-		add espace_proche_route to: espace_proche_routes;
+		
+		// Seules les petites routes (et non les grosses routes, les embranchements et les ponts) peuvent avoir un "espace proche route"
+		if !(pont = 'T' or type = 'primary' or type = 'primary_link' or type = 'secondary_link') {
+			espace_proche_route <- self.shape + largeur_espace_proche_route - chaussee;
+			add espace_proche_route to: espace_proche_routes;
+		}
 //		loop i from: 0 to: length(shape.points) - 2 {
 //			segments << line([shape.points[i], shape.points[i+1]]);
 //		}
