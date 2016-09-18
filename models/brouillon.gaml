@@ -14,7 +14,7 @@ global {
 	}	
 }
 
-experiment genmicro type: gui {
+experiment essai_exp type: gui {
 	/** Insert here the definition of the input and output of the model */
 	output {
 		display main_display type: opengl {
