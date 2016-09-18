@@ -1,0 +1,10 @@
+#
+#Sun Sep 18 12:21:45 CEST 2016
+operators=-~as~envelope~length~and~>~rectangle~\=~empty~.~flip~+~\!\=~any_location_in~rnd_choice~read~/~*~collect~min~max
+plugins=msi.gama.core~ummisco.gama.opengl
+attributes=area
+statements=reflex~let~if~else~set~loop~create~arg~do~action~add~aspect~draw~ask~init~write~output~display~display_population
+skills=reflex
+constants=grey~lightgrey~black~lightgreen~green~blue~red
+types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~map~container
+actions=debug~error~tell~write~die~_init_~_step_~halt~pause

@@ -1,0 +1,10 @@
+#
+#Sun Sep 18 12:21:45 CEST 2016
+operators=-~as~envelope~+~.~length~line~internal_at~rgb~*~/~and~<~>\=~>~or~<\=~\!~flip~gauss~closest_to~with_min_of~distance_to~towards~first~last~rotated_by~?~\:~overlapping~\=~inter~\!\=~^~rnd_choice~rectangle~where~one_of~any_location_in~read~max~collect
+plugins=msi.gama.core~ummisco.gama.opengl
+attributes=points~area
+statements=aspect~draw~action~set~add~loop~if~else~let~init~ask~reflex~write~create~arg~remove~do~save~output~display~display_population~monitor
+skills=reflex
+constants=grey~lightgrey~black~lightgreen~green~white~red
+types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~map~container
+actions=debug~error~tell~write~die~_init_~_step_~halt~pause

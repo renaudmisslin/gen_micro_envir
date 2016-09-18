@@ -1,0 +1,9 @@
+#
+#Sun Sep 18 12:21:45 CEST 2016
+operators=-~as~envelope~rgb~>~.~or~\=~>\=~poisson~+~min_of~max_of~internal_at~/~flip
+plugins=msi.gama.core~ummisco.gama.opengl
+statements=action~aspect~draw~init~arg~switch~match~return~reflex~let~loop~set~if~create~add~write~ask~output~display~display_grid~display_population
+skills=reflex~grid
+constants=black~white
+types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~container
+actions=debug~error~tell~write~die~_init_~_step_~halt~pause
