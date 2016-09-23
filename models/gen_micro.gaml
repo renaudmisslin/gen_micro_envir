@@ -7,8 +7,8 @@ model genmicro
 
 global {
 	// Paramètres
-	float largeur_chaussee <- 10.0;
-	float largeur_espace_proche_route <- 35.0;
+	float largeur_chaussee <- 8.0;
+	float largeur_espace_proche_route <- 30.0;
 	int max_nhab_menage <- 10;
 	float lambda_nhab_menage <- 3.5;
 	float taille_bat <- 10.0;
@@ -46,13 +46,14 @@ global {
 			self.pop <- int(self.grid_value);
 			self.men <- int(cell_men[self.grid_x, self.grid_y].grid_value);
 			self.ndvi <- cell_ndvi[self.grid_x, self.grid_y].grid_value;
+			self.ndvi <- self.ndvi < 0 ? 0 : self.ndvi;
 			self.proba_bati <- 1 - (cell_proba_bati[self.grid_x, self.grid_y].grid_value - min_proba_bati) / (max_proba_bati - min_proba_bati); // l'indice de proba_bati est indicé entre 0 et 1
 			
 			// Variables calculées
 			self.bati <- flip(self.proba_bati); // Définition bati / nonbati
 			self.pop_sdf <- self.pop;
 			self.men_sdf <- self.men;
-			self.color <- color_bati(self.bati);
+			self.color <- self.color_vegetation; //self.color <- color_bati(self.bati);
 			self.men_resid <- 0;
 			self.pop_resid <- 0;
 		}
@@ -99,6 +100,8 @@ global {
 			// Définition des espaces loins ou proches de la route
 			mon_espace_libre_proche_route <- mon_espace_libre inter zone_proche_routes; 
 			mon_espace_libre_loin_route <- mon_espace_libre - mon_espace_libre_proche_route; 
+			
+			write "ndvi = " + self.ndvi;
 		}
 	}
 	
@@ -135,17 +138,6 @@ grid cell_env file: grid_pop neighbors: 8 {
 	geometry mon_espace_libre_proche_route;
 	geometry mon_espace_libre_loin_route;
 	geometry mon_espace_bati;
-
-	rgb color_bati(bool m) {
-		switch m {
-			match true {
-				return rgb(100, 100, 100);
-			}
-			match false {
-				return rgb(155,187,89);
-			}
-		}
-	}
 	
 	// Mise à jour de l'espace libre
 	reflex update_espace_libre {
@@ -183,9 +175,23 @@ grid cell_env file: grid_pop neighbors: 8 {
 		if (pop_sdf = 0 and men_sdf > 0) { write "Il reste " + men_sdf + " ménage(s) sur " + self;}
 		if (men_sdf = 0 and pop_sdf > 0) { write "Il reste " + pop_sdf + " habitant(s) sur " + self;}
 	}
+
+	// Calcul des couleurs
+	rgb color_bati(bool m) {
+		switch m {
+			match true {
+				return rgb(100, 100, 100);
+			}
+			match false {
+				return rgb(155,187,89);
+			}
+		}
+	}
+	
+	rgb color_vegetation -> {rgb([90 + (130 - 90) * (ndvi), 130, 90 + (130 - 90) * (ndvi)])};
 	
 	aspect base {
-	
+		draw shape color: color_vegetation;
 	}
 }
 
@@ -248,7 +254,6 @@ species route {
 species menage {
 	int n_membres;
 	batiment mon_batiment;
-	int mon_etage;
 	cell_env ma_cell_env;
 	cell_env ma_cell_env_origin;
 	int deplace <- 0;
@@ -289,21 +294,28 @@ species menage {
 				write "Je change de cell_env --> " + deplace + " fois";
 			} else { // S'il n'y a pas d'espace libre à côté il construit un étage dans sa cell_env d'origine
 				list<batiment> batiments_possibles <- ma_cell_env_origin.mes_batiments collect each;
-				mon_batiment <- one_of(batiments_possibles);
-				add self to: mon_batiment.mes_menages_batiment;
+				if (length(batiments_possibles) >= 1) {
+					mon_batiment <- one_of(batiments_possibles);
+					add self to: mon_batiment.mes_menages_batiment;
+				} else {
+					mon_batiment <- batiment closest_to ma_cell_env_origin;
+				}
 				mon_batiment.n_etages <- mon_batiment.n_etages + 1;
+				write "Nombre d'étages = " + mon_batiment.n_etages;
 				deplace <- 0;
+				remove self from: ma_cell_env.mes_menages_supp;
 			}
 		}
 		
 		// Si une zone ou_construire a été définie, on construit un batiment
 		if (ou_construire != nil) {
 			point loc <- any_location_in(ou_construire);	
-			create batiment with: [shape::bat_shape, ma_cell_env_batiment::ma_cell_env, location::loc, nb_etages::1, proche_route::bat_proche_route]{
+			create batiment with: [shape::bat_shape, ma_cell_env_batiment::ma_cell_env, location::loc, proche_route::bat_proche_route]{
 				add myself to: mes_menages_batiment;
 				add self to: myself.ma_cell_env.mes_batiments;
 				espace_bati_total <- espace_bati_total + self.shape * 2;
 			}
+			if (ma_cell_env.mes_menages_supp contains self) {remove self from: ma_cell_env.mes_menages_supp;}
 			deplace <- 0;
 		}		
 	}
@@ -328,7 +340,6 @@ species batiment {
 	bool proche_route;
 	route route_voisine;
 	int angle_route_voisine;
-	float hauteur <- hauteur_etage * n_etages;
 
 	init {
 		if (proche_route){
@@ -337,9 +348,10 @@ species batiment {
 			angle_route_voisine <- first(pproche.points) towards last(pproche.points);
 			shape <- shape rotated_by (angle_route_voisine + (flip(0.7) ? 90 : 0));
 		}
+		n_etages <- 1;
 	}
 	aspect base {
-		draw shape color: color depth: n_etages * 2 border: color_border;
+		draw shape color: color depth: n_etages * 5 border: color_border;
 	}
 }
 
@@ -348,8 +360,8 @@ experiment genmicro type: gui {
 		display main_display type: opengl {
 			//grid cell_env;
 			//grid cell_ggmap transparency: 0.6;
-            graphics "espace_non_bati" {draw espace_non_bati color:#green;}
-            //graphics "espace_libre" {draw espace_libre_total color:#grey;}
+            graphics "espace_non_bati" {draw espace_non_bati color: rgb(155,187,89);}
+            graphics "espace_libre" {draw espace_libre_total color: rgb(100,100,100);}
             //graphics "zone_proche_routes" transparency:0.9 {draw zone_proche_routes color:#red;}
 			species route aspect: base;
 			species batiment aspect: base;
