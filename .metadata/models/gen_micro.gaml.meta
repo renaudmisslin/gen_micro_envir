@@ -1,10 +1,10 @@
 #
-#Sun Sep 18 22:54:52 CEST 2016
-operators=-~as~envelope~+~.~\!~or~\=~rectangle~rgb~>\=~and~<\=~poisson~<~>~min_of~max_of~internal_at~/~flip~read~length
+#Fri Sep 23 09:09:44 CEST 2016
+operators=-~as~envelope~collect~.~sum~length~+~\!~or~\=~line~internal_at~rectangle~and~\!\=~where~one_of~<\=~flip~any_location_in~*~>~rgb~closest_to~with_min_of~distance_to~towards~first~last~rotated_by~?~\:~inter~>\=~poisson~<~min_of~max_of~/~read~union
 plugins=msi.gama.core~ummisco.gama.opengl
-attributes=area
-statements=action~set~add~if~aspect~draw~init~let~arg~switch~match~return~reflex~else~loop~create~write~ask~do~output~display~display_grid~display_population
+attributes=points~area
+statements=action~set~add~if~loop~aspect~draw~let~else~do~write~create~arg~ask~remove~init~reflex~switch~match~return~output~display~graphics~display_population
 skills=reflex~grid
-constants=black~white
+constants=black~white~green
 types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~container
 actions=debug~error~tell~write~die~_init_~_step_~halt~pause

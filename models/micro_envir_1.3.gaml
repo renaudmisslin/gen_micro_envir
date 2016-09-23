@@ -363,8 +363,7 @@ species foyer {
 			}
 			else if ((!mon_patchpop.proche_route_est_constructible) and (mon_patchpop.loin_route_est_constructible)) {
 				ou_construire <- mon_patchpop.place_libre_loin_route;
-			}			
-
+			}
 			else {
 				write 'probleme 1';
 			}
