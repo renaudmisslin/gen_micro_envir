@@ -1,5 +1,5 @@
 #
-#Thu Sep 22 16:11:56 CEST 2016
+#Thu Sep 29 11:08:50 CEST 2016
 operators=-~as~envelope~+~.~length~line~internal_at~rgb~*~/~and~<~>\=~>~or~<\=~\!~flip~gauss~closest_to~with_min_of~distance_to~towards~first~last~rotated_by~?~\:~overlapping~\=~inter~\!\=~^~rnd_choice~rectangle~where~one_of~any_location_in~read~max~collect
 plugins=msi.gama.core~ummisco.gama.opengl
 attributes=points~area

@@ -1,5 +1,5 @@
 #
-#Thu Sep 22 08:46:23 CEST 2016
+#Tue Sep 27 11:24:16 CEST 2016
 operators=-~as~envelope~+~.~flip~length~inter~>~rnd_choice~rectangle~\=~empty~and~\!\=~any_location_in~read~/~*~collect~min~max
 plugins=msi.gama.core~ummisco.gama.opengl
 attributes=area

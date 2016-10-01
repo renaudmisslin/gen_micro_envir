@@ -1,8 +1,10 @@
 #
-#Thu Sep 22 08:46:23 CEST 2016
-operators=envelope~-~poisson
+#Sat Oct 01 12:13:21 CEST 2016
+operators=-~as~envelope~rectangle~+~.~*~rgb~<~any_location_in~copy~closest_to~\!\=~point~or~intersects~\!~internal_at~length
 plugins=msi.gama.core~ummisco.gama.opengl
-statements=reflex~write~output~display
+attributes=x~y
+statements=action~arg~create~set~write~ask~do~aspect~draw~init~reflex~let~if~else~output~display~graphics~display_population
 skills=reflex
-types=geometry~string~list~int~unknown~point~agent~rgb~float~bool~date
+constants=orange~yellow
+types=string~list~int~unknown~file~geometry~point~agent~rgb~float~bool~date~container
 actions=debug~error~tell~write~die~_init_~_step_~halt~pause
