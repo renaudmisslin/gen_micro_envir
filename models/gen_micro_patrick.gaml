@@ -11,14 +11,22 @@ global {
 	float largeur_espace_proche_route <- 200.0 const: true;
 	int max_nhab_menage <- 10;
 	float lambda_nhab_menage <- 3.5;
-	float taille_bat <- 10.0;
 	float flip_proche_route <- 0.8;
 	int n_cell_deplace_max <- 4;
 	float hauteur_etage <- 2.5;
-	int n_men_lim_bat_mitoyen <- 5;
+	int N_MEN_LIM_BAT <- 1;
 	float TOL_ESPACE_NON_BATI <- 4.0;
 	float BUF_ESPACE_NON_BATI <- 2.0;
+	float taille_bat <- 10.0;
+	int SCENARIO_BATIMENT <- 2;
 	float taille_carre_graines <- 40.0; //taille des carres pour les graines
+	int N_CELL_BAT_VOISINS <- 4;
+	int SCENARIO_MENAGE <- 3;
+	float RATIO_GLP_INT_MAX <- 0.3;
+	float RATIO_GLP_INT_MIN <- 0.5;
+	float LAMBDA_GLP_ESP_NON_BATIS_U <- 3.0;
+	float LAMBDA_GLP_MEN_INTEXT_A <- 4.0;
+	float LAMBDA_GLP_VOIS_EXT_B <- 2.0;
 	
 	// Fichiers en entrée
 	file grid_men <- file('../data_micro/men_zone.tif');
@@ -140,8 +148,9 @@ global {
 				pop_sdf <- pop_sdf - nhab_menage;
 				men_sdf <- men_sdf - 1;
 			}
-			//write "fin création des ménages d'une cellule";
 		}
+		
+		// Création de bâtiments
 		loop g over:espace_libre_total.geometries  {
 			list<batiment> bats;
 			list<geometry> decomp <- g to_squares(taille_carre_graines);
@@ -150,19 +159,111 @@ global {
 			}
 			list<batiment> nouveaux_bats <- copy(bats);
 			loop while: not empty(bats) {
-				do creer_batiment_contigu(bats,g, nouveaux_bats); 
-			
+				do creer_batiment_contigu(bats,g, nouveaux_bats);
 			}
 		}
-	
+		
+		ask batiment {
+			cell_env(location).mes_batiments << self;
+		}
+		int cpt_bat <- 0;
+		ask cell_env {
+			batiments_voisins <- batiment at_distance N_CELL_BAT_VOISINS; //Récupération des batiments voisins et des bâtiments de la cellule pour le logement des ménages
+		}
+		// Logement des ménages
+		ask menage {
+			list<batiment> bat_inhabites <- ma_cell_env.mes_batiments where (length(each.mes_menages_batiment) = 0); // Liste de bâtiments inhabités dans le voisinage)
+			list<batiment> bat_inhabites_voisins <- ma_cell_env.batiments_voisins where (length(each.mes_menages_batiment) = 0); // Liste de bâtiments inhabités dans le voisinage)
+			
+			switch SCENARIO_MENAGE {
+				match 1 { // Scenario 1 : On commence par remplir sa propre cellule puis on remplit les cellules voisines
+					if (length(bat_inhabites) > 0) { // S'il reste des bat inoccupés dans la CE, on les occupe
+						mon_batiment <- one_of(bat_inhabites);
+					} else if (length(bat_inhabites_voisins) > 0) { 
+						mon_batiment <- one_of(bat_inhabites_voisins); //S'il en reste pas dans la CE mais qu'il en reste dans les voisins, on occupe ceux des voisins
+					} else {
+						list<batiment> batiments_dispo <- ma_cell_env.batiments_voisins + ma_cell_env.mes_batiments;
+						mon_batiment <- one_of(batiments_dispo);	// sinon on prend un bâtiment dans le voisinage
+					}
+				}
+				match 2 { // Scenario 2 : On remplit les cellules voisines et pas forcément sa cellule
+					bat_inhabites_voisins <- bat_inhabites_voisins + bat_inhabites;
+					if (length(bat_inhabites_voisins) > 0) { 
+						mon_batiment <- one_of(bat_inhabites_voisins); //S'il en reste pas dans la CE mais qu'il en reste dans les voisins, on occupe ceux des voisins
+					} else {
+						list<batiment> batiments_dispo <- ma_cell_env.batiments_voisins + ma_cell_env.mes_batiments;
+						mon_batiment <- one_of(batiments_dispo); // sinon on prend un bâtiment dans le voisinage
+					}
+				}
+				match 3 { // Scenario 3 : On construit des bâtiments de hauteur semblable en remplissant les CE voisines (pas forcément sa cellule)
+					list<batiment> batiments_dispo <- ma_cell_env.batiments_voisins + ma_cell_env.mes_batiments;
+					int n_etages_min <- 999;
+					loop bat over: batiments_dispo {
+						if (bat.n_etages < n_etages_min) {n_etages_min <- bat.n_etages;}
+					}
+					batiments_dispo <- batiments_dispo where (each.n_etages = n_etages_min); 
+					mon_batiment <- one_of(batiments_dispo); // sinon on prend un bâtiment dans le voisinage
+				}
+				match 4 { // Scenario 3 : On construit des bâtiments de hauteur semblable en remplissant les CE voisines (pas forcément sa cellule). Leur taille évolue en fonction de la densité.
+					
+				}
+			}
+			ma_cell_env <- mon_batiment.cell_env_batiment;
+			add self to: self.ma_cell_env.mes_menages;
+			mon_batiment.mes_menages_batiment << self;
+			mon_batiment.n_etages <- mon_batiment.n_etages + 1;
+		}
+		
+		int cpt_inhab <- 0;
+		ask batiment {
+			if (length(mes_menages_batiment) = 0) {
+				cpt_inhab <- cpt_inhab + 1;
+				//color <- #green;
+				do die;
+			}
+		}
+		write 'Le nb de bâtiment(s) non habité(s) est de ' + cpt_inhab;
+		//Calcul du nombre de GLP par cell_env
+
+		
+		ask cell_env {
+			// Actualisation du nombre de ménages et d'habitants de chaque cellule
+			int n_membres_men_cell_env;
+			loop eachmen over: mes_menages {
+				n_membres_men_cell_env <- n_membres_men_cell_env + eachmen.n_membres;
+			}
+			pop_resid <- n_membres_men_cell_env ;
+			men_resid <- length(mes_menages);
+			
+			// Initialisation des paramètres aléatoires permettant de calculer le nombre de gites
+			ratio_glp_int <- rnd(RATIO_GLP_INT_MIN,RATIO_GLP_INT_MAX);
+			n_glp_esp_non_bati_u <- poisson(LAMBDA_GLP_ESP_NON_BATIS_U);
+			n_glp_men_intext_a <- poisson(LAMBDA_GLP_MEN_INTEXT_A);
+			n_glp_vois_ext_b <- poisson(LAMBDA_GLP_VOIS_EXT_B);
+
+			// Calcul GLP INT
+			ask mes_batiments {
+				n_glp_int <- myself.men_resid * int(myself.n_glp_men_intext_a * myself.ratio_glp_int); // Les bâtiments calculs leur nb de GLP in en fonction de leur nn de men et autres param
+				myself.n_glp_int_tot <- myself.n_glp_int_tot + n_glp_int; // On calcule le nombre de GLP INT TOT dans chaque cellule
+			}
+			
+			// Calcul GLP EXT
+			int glp_prod_vois;
+			loop cell_env_neighbors over: neighbors { // Calcul du nombre de GLP créés par les voisins
+				glp_prod_vois <- glp_prod_vois + cell_env_neighbors.men_resid * cell_env_neighbors.n_glp_vois_ext_b; 
+			} 
+			n_glp_ext <- n_glp_esp_non_bati_u + int((men_resid * n_glp_men_intext_a) * (1 - ratio_glp_int)) + glp_prod_vois;
+		}
 	}
 
 	action creer_bati_proche_route(geometry carre, list<batiment> bats) {
+
 		geometry possible_surface <- (carre - taille_bat);
 		if (possible_surface != nil) and possible_surface.area > 0 {
 			point loc <- any_location_in(carre - taille_bat);
+			cell_env loc_cell_env <- cell_env closest_to loc;
 			if (loc distance_to espace_non_bati > taille_bat) and empty(batiment overlapping (rectangle(taille_bat, taille_bat) at_location loc)) {
-				create batiment with: [shape::rectangle(taille_bat,taille_bat), location::loc, color:: (rgb(80,80,80))] {
+				create batiment with: [shape::rectangle(taille_bat,taille_bat), location::loc, color:: (rgb(80,80,80)), n_etages::0, cell_env_batiment::loc_cell_env] {
 					route route_proche <- route closest_to self;
 					float dist <- route_proche distance_to self;
 					if (dist < largeur_espace_proche_route) {do alignement;}
@@ -192,7 +293,8 @@ global {
 				if ((b inter bat_geom).area > 0.1) {deja_pris <- true; break;} //le 0.1 c'est une tolérance (surface acceptée de superposition entre 2 batiments)
 			}
 			if ((not deja_pris) and ( g covers bat_geom) and empty(routes overlapping bat_geom)) {
-				create batiment with:[shape::bat_geom, color:: rgb(100,100,100) ] {
+				cell_env loc_cell_env <- cell_env closest_to bat_geom;
+				create batiment with:[shape::bat_geom, color:: rgb(100,100,100), n_etages::0, cell_env_batiment::loc_cell_env] {
 					batiments << self;
 					nouveaux_bats << self;
 				}
@@ -216,13 +318,23 @@ grid cell_env file: grid_pop neighbors: 8 {
 	int men_resid;
 	int pop_resid;
 	rgb color;
+	
 	list<menage> mes_menages <- [];
 	list<menage> mes_menages_supp <- [];
 	list<batiment> mes_batiments <- [];
+	list<batiment> batiments_voisins <- [];
+	
 	geometry mon_espace_libre; // Espace libre pour y construire un batiment
 	geometry mon_espace_libre_proche_route;
 	geometry mon_espace_libre_loin_route;
 	geometry mon_espace_bati;
+	
+	int n_glp_ext;
+	int n_glp_int_tot;
+	float ratio_glp_int;
+	int n_glp_esp_non_bati_u;
+	int n_glp_men_intext_a;
+	int n_glp_vois_ext_b;	
 	
 	// Mise à jour de l'espace libre
 	reflex update_espace_libre {
@@ -313,82 +425,6 @@ species menage {
 	batiment mon_batiment;
 	cell_env ma_cell_env;
 	cell_env ma_cell_env_origin;
-	int deplace <- 0;
-	
-	init { // --- loger le ménage ---
-		//do emmenager;
-	}
-	
-	reflex chercher_nouveau_batiment when: deplace > 0 {
-		//do emmenager;
-	}
-	
-	action emmenager {
-		// Construire un bâtiment
-		geometry bat_shape <- rectangle(taille_bat,taille_bat); // Définition de la forme et de la taille du bâtiment
-		geometry ou_construire <- nil;
-		bool bat_proche_route <- false;
-		
-		if (ma_cell_env.mon_espace_libre_proche_route != nil and ma_cell_env.mon_espace_libre_loin_route != nil) { // La cellule contient des espaces proches et loin route
-			if (flip(flip_proche_route)) {
-				ou_construire <- ma_cell_env.mon_espace_libre_proche_route;
-				bat_proche_route <- true;
-			} // on construit dans le proche route
-			else {ou_construire <- ma_cell_env.mon_espace_libre_loin_route;} // on construit dans le loin route
-		} else if (ma_cell_env.mon_espace_libre_proche_route != nil and ma_cell_env.mon_espace_libre_loin_route = nil) { // La cellule contient des espace proche route et pas de loin route
-			ou_construire <- ma_cell_env.mon_espace_libre_proche_route; // on construit dans le proche route
-			bat_proche_route <- true;
-		} else if (ma_cell_env.mon_espace_libre_proche_route = nil and ma_cell_env.mon_espace_libre_loin_route != nil) { // La cellule contient des espace proche route et pas de loin route
-			ou_construire <- ma_cell_env.mon_espace_libre_loin_route; // on construit dans le proche route
-		} else {
-			// Le ménage choisis une cell_env voisine s'il y a des espaces libres
-			list<cell_env> mes_voisins_libres <- ma_cell_env.neighbors where (each.mon_espace_libre != nil);
-			cell_env ma_new_cell_env <- one_of(mes_voisins_libres);
-			
-			if (ma_new_cell_env != nil and deplace <= n_cell_deplace_max) {
-				ma_cell_env <- ma_new_cell_env;
-				do changer_cell_env;
-			} else { // S'il n'y a pas d'espace libre à côté il construit un étage dans sa cell_env d'origine
-				list<batiment> batiments_possibles <- ma_cell_env_origin.mes_batiments collect each;
-				if (length(batiments_possibles) >= 1) {
-					mon_batiment <- one_of(batiments_possibles);
-					add self to: mon_batiment.mes_menages_batiment;
-				} else {
-					mon_batiment <- batiment closest_to ma_cell_env_origin;
-				}
-				mon_batiment.n_etages <- mon_batiment.n_etages + 1;
-				deplace <- 0;
-				remove self from: ma_cell_env.mes_menages_supp;
-			}
-		}
-		
-		// Si une zone ou_construire a été définie, on construit un batiment
-		if (ou_construire != nil) {
-			point loc <- any_location_in(ou_construire);	
-			create batiment with: [shape::bat_shape, cell_env_batiment::ma_cell_env, location::loc, proche_route::bat_proche_route] returns: bat_en_cours {
-				espace_bati_total <- espace_bati_total + self.shape * 2;
-			}
-			
-			ask bat_en_cours {
-				add myself to: mes_menages_batiment;
-				add self to: cell_env_batiment.mes_batiments;
-				//do initialisation;
-			}
-			
-			if (ma_cell_env.mes_menages_supp contains self) {remove self from: ma_cell_env.mes_menages_supp;}
-			deplace <- 0;
-		}		
-	}
-	
-	action changer_cell_env { // Le ménage est transféré a une autre cellule environnement (il est détruit, puis sera créer ailleurs)
-		ask ma_cell_env_origin { // On change les paramètres de la cellule d'origine liés à ce ménage
-			remove myself from: mes_menages;
-			pop_resid <- pop_resid  - myself.n_membres;
-			men_resid <- men_resid  - 1;
-		}
-		add self to: ma_cell_env.mes_menages_supp;
-		deplace <- deplace + 1;
-	}
 }
 
 species batiment frequency: 0 {
@@ -399,8 +435,8 @@ species batiment frequency: 0 {
 	rgb color_border <- rgb(90,90,90);
 	bool proche_route;
 	float dist_route_voisine;
-	list<batiment> batiments_voisins <- [];
-
+	int n_glp_int;
+	
 	action alignement {
 		route route_voisine <- route closest_to self;
 		geometry pproche <- route_voisine.segments with_min_of (self distance_to each);
@@ -416,8 +452,8 @@ species batiment frequency: 0 {
 experiment genmicro type: gui {
 	output {
 		display main_display type: opengl {
-			//grid cell_env;
-			grid cell_ggmap transparency: 0;
+			grid cell_env;
+			//grid cell_ggmap transparency: 0;
             //graphics "espace_non_bati" {draw espace_non_bati color: rgb(155,187,89);}
             //graphics "espace_libre" {draw espace_libre_total color: rgb(100,100,100);}
             //graphics "chaussee" {draw zone_chaussees color: rgb(255,255,255);}
