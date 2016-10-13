@@ -13,13 +13,17 @@ global {
 	float lambda_nhab_menage <- 3.5;
 	float flip_proche_route <- 0.8;
 	int n_cell_deplace_max <- 4;
-	float hauteur_etage <- 2.5;
+	float H_ETAGE <- 2.5;
 	int N_MEN_LIM_BAT <- 1;
 	float TOL_ESPACE_NON_BATI <- 4.0;
 	float BUF_ESPACE_NON_BATI <- 2.0;
-	float taille_bat <- 10.0;
+	float TAILLE_BAT_LONG <- 10.0;
+	float TAILLE_BAT_LARG <- 10.0;
 	int SCENARIO_BATIMENT <- 2;
-	float taille_carre_graines <- 40.0; //taille des carres pour les graines
+	float INTERCEPT_TAILLE_BAT <- 206.25;
+	float COEF_TAILLE_BAT <- -6.25;
+	float RATIO_TBAT_MAX <- 2.3;
+	float TAILLE_CARRE_GRAINES <- 50.0;
 	int N_CELL_BAT_VOISINS <- 4;
 	int SCENARIO_MENAGE <- 3;
 	float RATIO_GLP_INT_MAX <- 0.3;
@@ -153,7 +157,7 @@ global {
 		// Création de bâtiments
 		loop g over:espace_libre_total.geometries  {
 			list<batiment> bats;
-			list<geometry> decomp <- g to_squares(taille_carre_graines);
+			list<geometry> decomp <- g to_squares(TAILLE_CARRE_GRAINES);
 			loop carre over: decomp  {
 				do creer_bati_proche_route(carre, bats); 
 			}
@@ -257,13 +261,20 @@ global {
 	}
 
 	action creer_bati_proche_route(geometry carre, list<batiment> bats) {
-
-		geometry possible_surface <- (carre - taille_bat);
-		if (possible_surface != nil) and possible_surface.area > 0 {
-			point loc <- any_location_in(carre - taille_bat);
+		if (SCENARIO_BATIMENT = 2) {
+			float mean_nmen <- mean((cell_env overlapping carre) collect (float(each.men_resid)));
+			float aire_bat <- INTERCEPT_TAILLE_BAT + (COEF_TAILLE_BAT * mean_nmen);
+			float ratio_tbat <- rnd(1,RATIO_TBAT_MAX);
+			write 'mean_nmen = ' + mean_nmen;
+			TAILLE_BAT_LARG <- sqrt(aire_bat * ratio_tbat);
+			TAILLE_BAT_LONG <- aire_bat / TAILLE_BAT_LARG;
+		} 
+		geometry possible_surface <- (carre - TAILLE_BAT_LONG);
+		if ((possible_surface != nil) and possible_surface.area > 0) {
+			point loc <- any_location_in(carre - TAILLE_BAT_LONG);
 			cell_env loc_cell_env <- cell_env closest_to loc;
-			if (loc distance_to espace_non_bati > taille_bat) and empty(batiment overlapping (rectangle(taille_bat, taille_bat) at_location loc)) {
-				create batiment with: [shape::rectangle(taille_bat,taille_bat), location::loc, color:: (rgb(80,80,80)), n_etages::0, cell_env_batiment::loc_cell_env] {
+			if (loc distance_to espace_non_bati > TAILLE_BAT_LONG) and empty(batiment overlapping (rectangle(TAILLE_BAT_LONG, TAILLE_BAT_LARG) at_location loc)) {
+				create batiment with: [shape::rectangle(TAILLE_BAT_LONG,TAILLE_BAT_LARG), location::loc, color:: (rgb(80,80,80)), n_etages::0, cell_env_batiment::loc_cell_env] {
 					route route_proche <- route closest_to self;
 					float dist <- route_proche distance_to self;
 					if (dist < largeur_espace_proche_route) {do alignement;}
