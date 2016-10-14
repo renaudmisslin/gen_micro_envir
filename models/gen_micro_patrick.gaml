@@ -19,7 +19,7 @@ global {
 	float BUF_ESPACE_NON_BATI <- 2.0;
 	float TAILLE_BAT_LONG <- 10.0;
 	float TAILLE_BAT_LARG <- 10.0;
-	int SCENARIO_BATIMENT <- 2;
+	int SCENARIO_BATIMENT <- 1;
 	float INTERCEPT_TAILLE_BAT <- 206.25;
 	float COEF_TAILLE_BAT <- -6.25;
 	float RATIO_TBAT_MAX <- 2.3;
@@ -32,6 +32,15 @@ global {
 	float LAMBDA_GLP_MEN_INTEXT_A <- 4.0;
 	float LAMBDA_GLP_VOIS_EXT_B <- 2.0;
 	
+	// Paramètres visualisation
+	float LIM_NDVI_COL <- 0.3;
+	int vert_r <- 155;
+	int vert_g <- 187;
+	int vert_b <- 89;
+	int gris_r <- 195;
+	int gris_g <- 195;
+	int gris_b <- 195;
+	
 	// Fichiers en entrée
 	file grid_men <- file('../data_micro/men_zone.tif');
 	file grid_pop <- file('../data_micro/pop_zone.tif');
@@ -39,7 +48,11 @@ global {
 	file grid_proba_bati <- file('../data_micro/dist_raster_zone.tif');
 	file grid_ggmap <- file('../data_micro/extract_ggmap_zone.tif');
 	file shp_routes <- file('../data_micro/routes_zone.shp');
-	
+
+	// Fichiers de sortie
+	string batiments_sortie <- "../results/batiments_sortie.shp";
+	string cell_env_sortie <- "../results/cell_env_sortie.shp";
+
 	// Variables globales
 	list<geometry> chaussees;
 	list<geometry> espace_proche_routes;
@@ -83,13 +96,19 @@ global {
 			self.bati <- flip(self.proba_bati); // Définition bati / nonbati
 			self.pop_sdf <- self.pop;
 			self.men_sdf <- self.men;
-			self.color <- self.color_vegetation; //self.color <- color_bati(self.bati);
+			self.color <- self.color_vegetation(ndvi); //self.color <- color_bati(self.bati);
 			self.men_resid <- 0;
 			self.pop_resid <- 0;
 		}
 		ask cell_ggmap {
 			self.occsol <- int(self.grid_value);
 			self.color <- color_occsol(self.occsol);
+			if (self.occsol != 2) {
+				create ggmap_display with: [shape::shape, occsol::self.occsol];
+			}
+		}
+		ask ggmap_display {
+			self.color_occsol <- color_occsol(self.occsol);
 		}
 		/******************************************************************************************************************************************************************/
 		// Initialisation des routes et des zones autour (chaussees et zones proches)
@@ -137,7 +156,7 @@ global {
 					loop while: (nhab_menage <= 0 or nhab_menage > max_nhab_menage) { // On choisit le nb d'hab par ménage
 						nhab_menage <- poisson(lambda_nhab_menage);
 						if ((pop_sdf - nhab_menage) < (men_sdf - 1)) {nhab_menage <- 0;} // Si en enlevant le nb d'hab, le nb de pop sdf est inférieur au nombre de men sdf - 1, on retire
-						write 'je boucle car il y a ' + pop_sdf + ' personnes et ' + men_sdf + ' ménages';
+						//write 'je boucle car il y a ' + pop_sdf + ' personnes et ' + men_sdf + ' ménages';
 					}
 				}
 				// Création du ménage
@@ -145,8 +164,7 @@ global {
 					add self to: myself.mes_menages;
 					myself.pop_resid <- myself.pop_resid  + nhab_menage;
 					myself.men_resid <- myself.men_resid  + 1;
-					ma_cell_env<-myself;
-					write self;
+					ma_cell_env <- myself;
 				}
 				// Actualisation de la pop et des men sdf
 				pop_sdf <- pop_sdf - nhab_menage;
@@ -258,6 +276,10 @@ global {
 			} 
 			n_glp_ext <- n_glp_esp_non_bati_u + int((men_resid * n_glp_men_intext_a) * (1 - ratio_glp_int)) + glp_prod_vois;
 		}
+		// Sauvegarde des données initialisée
+		save batiment to: batiments_sortie type: "shp" with: [n_etages::"n_etages", n_menages::"n_menages", n_glp_int::"n_glp_int"];
+		save cell_env to: cell_env_sortie type: "shp" with: [ndvi::"ndvi", proba_bati::"proba_bati", bati::"est_construc", n_glp_ext::"n_glp_ext"];
+
 	}
 
 	action creer_bati_proche_route(geometry carre, list<batiment> bats) {
@@ -265,7 +287,6 @@ global {
 			float mean_nmen <- mean((cell_env overlapping carre) collect (float(each.men_resid)));
 			float aire_bat <- INTERCEPT_TAILLE_BAT + (COEF_TAILLE_BAT * mean_nmen);
 			float ratio_tbat <- rnd(1,RATIO_TBAT_MAX);
-			write 'mean_nmen = ' + mean_nmen;
 			TAILLE_BAT_LARG <- sqrt(aire_bat * ratio_tbat);
 			TAILLE_BAT_LONG <- aire_bat / TAILLE_BAT_LARG;
 		} 
@@ -313,7 +334,6 @@ global {
 		}
 	}
 }
-
 
 
 // Définition des grilles
@@ -367,9 +387,16 @@ grid cell_env file: grid_pop neighbors: 8 {
 			}
 		}
 	}
-	
-	rgb color_vegetation -> {rgb([90 + (130 - 90) * (ndvi), 130, 90 + (130 - 90) * (ndvi)])};
-	
+
+	rgb color_vegetation(float i)  {
+	if (i > LIM_NDVI_COL) {
+			return rgb(vert_r,vert_g,vert_b);
+		} else {
+			int r <- int(vert_r + (gris_r - vert_r) * (1 - i / LIM_NDVI_COL));
+			int b <- int(vert_b + (gris_b - vert_b) * (1 - i / LIM_NDVI_COL));
+			return rgb(r, gris_g, b);
+		}
+	}
 	aspect base {
 		draw shape color: color_vegetation;
 	}
@@ -384,6 +411,7 @@ grid cell_proba_bati file: grid_proba_bati use_regular_agents: false use_individ
 grid cell_ggmap file: grid_ggmap use_regular_agents: false use_individual_shapes: false schedules: [] {
 	int occsol;
 	rgb color;
+	float transparency_ggmap;
 	
 	rgb color_occsol(int m) {
 		switch m {
@@ -400,6 +428,28 @@ grid cell_ggmap file: grid_ggmap use_regular_agents: false use_individual_shapes
 	}
 }
 
+species ggmap_display {
+	int occsol;
+	rgb color_occsol;
+	
+	rgb color_occsol(int m) {
+		switch m {
+			match 1 {
+				return rgb(0,0,0); // routes
+			}
+			match 2 {
+				return rgb(253,234,218); // espace libre
+			}
+			match 3 {
+				return rgb(85,142,220); // eau
+			}
+		}
+	}
+
+	aspect base {
+		draw shape color: color_occsol;
+	}
+}
 
 species route {
 	string type;
@@ -438,7 +488,7 @@ species menage {
 	cell_env ma_cell_env_origin;
 }
 
-species batiment frequency: 0 {
+species batiment frequency: 1 {
 	int n_etages;
 	cell_env cell_env_batiment;
 	list<menage> mes_menages_batiment;
@@ -447,6 +497,7 @@ species batiment frequency: 0 {
 	bool proche_route;
 	float dist_route_voisine;
 	int n_glp_int;
+	int n_menages -> {length(mes_menages_batiment)};
 	
 	action alignement {
 		route route_voisine <- route closest_to self;
@@ -464,14 +515,15 @@ experiment genmicro type: gui {
 	output {
 		display main_display type: opengl {
 			grid cell_env;
-			//grid cell_ggmap transparency: 0;
+			species ggmap_display aspect: base;
+			//grid cell_ggmap;
             //graphics "espace_non_bati" {draw espace_non_bati color: rgb(155,187,89);}
             //graphics "espace_libre" {draw espace_libre_total color: rgb(100,100,100);}
             //graphics "chaussee" {draw zone_chaussees color: rgb(255,255,255);}
             //graphics "espace_libre_proche_route" {draw espace_libre_proche_routes color: rgb(100,100,100);}
             //graphics "espace_libre_proche_route" {draw espace_libre_loin_routes color: #red;}
             //graphics "zone_proche_routes" transparency:0.9 {draw zone_proche_routes color:#red;}
-			species route aspect: base;
+			//species route aspect: base;
 			species batiment aspect: base;
 		}
 	}
