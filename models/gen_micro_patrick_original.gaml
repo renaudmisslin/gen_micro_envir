@@ -59,10 +59,10 @@ global {
 	file grid_ndvi <- file('../data_micro/ndvi_zone.tif');
 	file grid_proba_bati <- file('../data_micro/dist_raster_zone.tif');
 	//file grid_ggmap <- file('../data_micro/extract_ggmap_zone.tif');
-	file shp_routes <- file('../data_micro/routes_zone_calib_part1.shp');
+	file shp_routes <- file('../data_micro/routes_zone_calib_part2.shp');
 	file shp_ggmap <- file('../data_micro/routes_canaux_diss.shp');
-	file shp_zone <- file('../includes/bangkhutien_zone_calib_part1.shp');
-	file shp_bat_bangkhutien <- file('../includes/bldg_bangkhuntien_calib_part1.shp');
+	file shp_zone <- file('../includes/bangkhutien_zone_calib_part2.shp');
+	file shp_bat_bangkhutien <- file('../includes/bldg_bangkhuntien_calib_part2.shp');
 	
 	// Fichiers de sortie
 	string sim_id <- "_SM_" + SCENARIO_MENAGE + "-SB_" + SCENARIO_BATIMENT+ "-" + seed;
@@ -458,27 +458,33 @@ global {
 		
 		// Calcul des erreurs globales
 		float sum <- 0.0;
-		loop i from:1 to: cpt_results - 1 {
+		loop i from:0 to: cpt_results - 1 {
 			sum <- sum + (mat_results[i,2] - mat_results[i,1])^2; 
 		}
 		float rmse_nb_bat <- sqrt(sum / (cpt_results - 1));
 		
 		sum <- 0.0;
-		loop i from:1 to: cpt_results - 1 {
+		loop i from:0 to: cpt_results - 1 {
 			sum <- sum + (mat_results[i,4] - mat_results[i,3])^2; 
 		}
 		float rmse_area_bat <- sqrt(sum / (cpt_results - 1));
 		
 		mat_results <- transpose(mat_results);
-		float median_est_inter <- median(mat_results column_at 5);
-		float median_obs_inter <- median(mat_results column_at 7);
-		float median_est_pond <- median(mat_results column_at 6);
-		float median_obs_pond <- median(mat_results column_at 8);
-		write column_at(mat_results, 8);
+		list<list> list_mat_results <- columns_list(mat_results);
+		list<list> new_mat <- nil;
+		loop i from:0 to: length(list_mat_results)-1 {
+			new_mat << list_mat_results[i];
+		}
+		matrix new_mat_results <- matrix(new_mat); 
+		
+		float median_est_inter <- median(new_mat_results column_at 5);
+		float median_obs_inter <- median(new_mat_results column_at 7);
+		float median_est_pond <- median(new_mat_results column_at 6);
+		float median_obs_pond <- median(new_mat_results column_at 8);
 	
 		matrix global_results <- matrix([["SCENARIO_BATIMENT","SCENARIO_MENAGE","largeur_espace_proche_route","N_CELL_BAT_VOISINS","flip_proche_route","TAILLE_CARRE_GRAINES","TOL_ESPACE_NON_BATI","BUF_ESPACE_NON_BATI","rmse_n","rmse_area","median_est_inter","median_obs_inter","median_est_pond","median_obs_pond"],[SCENARIO_BATIMENT,SCENARIO_MENAGE,largeur_espace_proche_route,N_CELL_BAT_VOISINS,flip_proche_route,TAILLE_CARRE_GRAINES,TOL_ESPACE_NON_BATI,BUF_ESPACE_NON_BATI,rmse_nb_bat,rmse_area_bat,median_est_inter,median_obs_inter,median_est_pond,median_obs_pond]]);
 		// Enregistrement
-		save mat_results to: "../results/results_valid.txt" type:"text";
+		save new_mat_results to: "../results/results_valid.txt" type:"text";
 		
 		save transpose(global_results) to: name_global_results type:"text";
 	}
@@ -753,10 +759,10 @@ experiment batch type: batch until: cycle = 2 repeat: 12 keep_seed:true {
 }
 
 experiment openmole keep_seed:true {
-	parameter largeur_espace_proche_route var: largeur_espace_proche_route; //among[100:300] by:50
-	parameter flip_proche_route var: flip_proche_route; //among[0.5:0.9] by: 0.1 
-	parameter TAILLE_CARRE_GRAINES var: TAILLE_CARRE_GRAINES; //among[30:80] by: 10   
-	parameter N_CELL_BAT_VOISINS var: N_CELL_BAT_VOISINS; //among[1:10] by: 1
-	parameter TOL_ESPACE_NON_BATI var: TOL_ESPACE_NON_BATI; //among[1:10] by: 1
-	parameter BUF_ESPACE_NON_BATI var: BUF_ESPACE_NON_BATI; //among[1:10] by: 1
+	parameter "largeur_espace_proche_route" var: largeur_espace_proche_route; //among[100:300] by:50
+	parameter "flip_proche_route" var: flip_proche_route; //among[0.5:0.9] by: 0.1 
+	parameter "TAILLE_CARRE_GRAINES" var: TAILLE_CARRE_GRAINES; //among[30:80] by: 10   
+	parameter "N_CELL_BAT_VOISINS" var: N_CELL_BAT_VOISINS; //among[1:10] by: 1
+	parameter "TOL_ESPACE_NON_BATI" var: TOL_ESPACE_NON_BATI; //among[1:10] by: 1
+	parameter "BUF_ESPACE_NON_BATI" var: BUF_ESPACE_NON_BATI; //among[1:10] by: 1
 }
