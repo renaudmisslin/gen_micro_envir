@@ -12,25 +12,30 @@ global {
 	int max_nhab_menage <- 10;
 	float lambda_nhab_menage <- 3.5;
 	float flip_proche_route <- 0.8;
-	int n_cell_deplace_max <- 4;
-	float H_ETAGE <- 2.5;
-	int N_MEN_LIM_BAT <- 1;
 	float TOL_ESPACE_NON_BATI <- 4.0;
 	float BUF_ESPACE_NON_BATI <- 2.0;
+	
+	float H_ETAGE <- 2.5;
 	float TAILLE_BAT_LONG <- 10.0;
 	float TAILLE_BAT_LARG <- 10.0;
-	int SCENARIO_BATIMENT <- 1;
+	int SCENARIO_BATIMENT <- 2; // SCENARIO
 	float INTERCEPT_TAILLE_BAT <- 206.25;
 	float COEF_TAILLE_BAT <- -6.25;
 	float RATIO_TBAT_MAX <- 2.3;
 	float TAILLE_CARRE_GRAINES <- 50.0;
-	int N_CELL_BAT_VOISINS <- 4;
-	int SCENARIO_MENAGE <- 3;
+	int N_CELL_BAT_VOISINS <- 8;
+	int SCENARIO_MENAGE <- 3; // SCENARIO
 	float RATIO_GLP_INT_MAX <- 0.3;
 	float RATIO_GLP_INT_MIN <- 0.5;
 	float LAMBDA_GLP_ESP_NON_BATIS_U <- 3.0;
 	float LAMBDA_GLP_MEN_INTEXT_A <- 4.0;
 	float LAMBDA_GLP_VOIS_EXT_B <- 2.0;
+	
+	// Paramètres de validation
+	int RES_GRID_VALID <- 1000;
+	int BUFFER_VALID <- 5;
+	float dist_valid_max <- 20.0;
+	float dist_valid_min <- float(BUFFER_VALID);
 	
 	// Paramètres visualisation
 	float LIM_NDVI_COL <- 0.3;
@@ -46,13 +51,18 @@ global {
 	file grid_pop <- file('../data_micro/pop_zone.tif');
 	file grid_ndvi <- file('../data_micro/ndvi_zone.tif');
 	file grid_proba_bati <- file('../data_micro/dist_raster_zone.tif');
-	file grid_ggmap <- file('../data_micro/extract_ggmap_zone.tif');
-	file shp_routes <- file('../data_micro/routes_zone.shp');
-
+	//file grid_ggmap <- file('../data_micro/extract_ggmap_zone.tif');
+	file shp_routes <- file('../data_micro/routes_zone_calib_part1.shp');
+	file shp_ggmap <- file('../data_micro/routes_canaux_diss.shp');
+	file shp_zone <- file('../includes/bangkhutien_zone_calib_part1.shp');
+	file shp_bat_bangkhutien <- file('../includes/bldg_bangkhuntien_calib_part1.shp');
+	
 	// Fichiers de sortie
-	string batiments_sortie <- "../results/batiments_sortie.shp";
-	string cell_env_sortie <- "../results/cell_env_sortie.shp";
-
+	string sim_id <- "_SM_" + SCENARIO_MENAGE + "-SB_" + SCENARIO_BATIMENT+ "-" + seed;
+	string batiments_sortie <- "../results" + sim_id+"/batiments_sortie.shp";
+	string cell_env_sortie <- "../results" + sim_id+"/cell_env_sortie.shp";
+	string result_valid_sortie <- "../results" + sim_id+"_valid.shp";
+	
 	// Variables globales
 	list<geometry> chaussees;
 	list<geometry> espace_proche_routes;
@@ -63,6 +73,7 @@ global {
 	geometry espace_bati_total;
 	geometry espace_libre_proche_routes;
 	geometry espace_libre_loin_routes;
+	geometry bangkhutien <- first(shp_zone);
 	
 	float t1;
 	float t2;
@@ -78,7 +89,7 @@ global {
 	// Initialisation
 	geometry shape <- envelope(grid_pop);
 	
-	init {
+	reflex dynamic when: cycle = 1 {
 		float t <- machine_time;
 		float min_proba_bati <- cell_proba_bati min_of (each.grid_value); //Calcul du min et du max de proba_bati pour indicer entre 0 et 1
 		float max_proba_bati <- cell_proba_bati max_of (each.grid_value);
@@ -90,7 +101,7 @@ global {
 			self.men <- int(cell_men[self.grid_x, self.grid_y].grid_value);
 			self.ndvi <- cell_ndvi[self.grid_x, self.grid_y].grid_value;
 			self.ndvi <- self.ndvi < 0 ? 0 : self.ndvi;
-			self.proba_bati <- 1 - (cell_proba_bati[self.grid_x, self.grid_y].grid_value - min_proba_bati) / (max_proba_bati - min_proba_bati); // l'indice de proba_bati est indicé entre 0 et 1
+			self.proba_bati <- (cell_proba_bati[self.grid_x, self.grid_y].grid_value - min_proba_bati) / (max_proba_bati - min_proba_bati); // l'indice de proba_bati est indicé entre 0 et 1
 			
 			// Variables calculées
 			self.bati <- flip(self.proba_bati); // Définition bati / nonbati
@@ -100,16 +111,20 @@ global {
 			self.men_resid <- 0;
 			self.pop_resid <- 0;
 		}
-		ask cell_ggmap {
+		espace_non_bati <-clean(union(shp_ggmap));
+		/*ask cell_ggmap {
 			self.occsol <- int(self.grid_value);
-			self.color <- color_occsol(self.occsol);
-			if (self.occsol != 2) {
-				create ggmap_display with: [shape::shape, occsol::self.occsol];
-			}
+			//self.color <- color_occsol(self.occsol);
+		}
+		espace_non_bati <-clean(union(cell_ggmap where (each.occsol != 2)));
+		ask cell_ggmap {
+			//if (self.occsol != 2) {
+			//	create ggmap_display with: [shape::shape, occsol::self.occsol];
+			//}
 		}
 		ask ggmap_display {
 			self.color_occsol <- color_occsol(self.occsol);
-		}
+		}*/
 		/******************************************************************************************************************************************************************/
 		// Initialisation des routes et des zones autour (chaussees et zones proches)
 		
@@ -122,29 +137,51 @@ global {
 		loop buff_chaussee over: chaussees {
 			zone_chaussees <- zone_chaussees + buff_chaussee;
 			cpt <- cpt + 1;
-			write "routes pretes : " + cpt + " sur " + nchaussees;
+			//if (cpt mod 100 = 0) {write "routes pretes : " + cpt + " sur " + nchaussees;}
 		}
 		loop buff_route over: espace_proche_routes {
 			zone_proche_routes <-  zone_proche_routes + buff_route;
 		}
 		/******************************************************************************************************************************************************************/
 		// Calcul de l'espace non bati (végétation, eau, routes)
-		espace_non_bati <-clean(union(cell_ggmap where (each.occsol != 2)));
+		write "intialisation de l'espace non bati";
 		espace_non_bati <- simplification(espace_non_bati, TOL_ESPACE_NON_BATI);
 		espace_non_bati <- espace_non_bati + BUF_ESPACE_NON_BATI;
+		write "simplification terminée";
 		
 		geometry espace_vegetalise <- union(cell_env where (!each.bati));
 		espace_non_bati <- espace_vegetalise + espace_non_bati;
+		write "ajout espace végétalisé terminée";
 		
-		espace_non_bati <- clean(union([espace_non_bati, zone_chaussees])); 
-		espace_libre_total <- shape - espace_non_bati;
+		espace_non_bati <- clean(union([espace_non_bati, zone_chaussees]));
+		write "union terminée";
+	
+		list<geometry> geoms <- bangkhutien to_squares(shape.width/5);
+		int cp <- 0;
+		loop g over: espace_non_bati.geometries {
+			list<geometry> geoms2;
+			loop g2 over: geoms  {
+				if (g2 overlaps g) {
+					geoms2<< g2 - g;
+				}
+				else {geoms2 << g2;}
+			}
+			geoms <- copy(geoms2);
+		//	write "difference: " +cp + "/" + length(espace_non_bati.geometries) ;
+			cp <- cp + 1;
+		}
+		write "construction espace non bati: " + (geoms count (each.area > 0));
+		espace_libre_total <- union(geoms where (each.area > 0));
+		
+		//espace_libre_total <- shape - espace_non_bati;)
+		write "espace_libre_total: " + length(espace_libre_total.geometries );
 		
 		write "Espaces non batis = " +  espace_non_bati.area;
 		write "Espaces non batis = " +  espace_non_bati.area * 100 / shape.area + "% de la zone totale";
 		
-		/******************************************************************************************************************************************************************/
 		// Calcul de l'espace libre à batir dans chaque cell_env et création des ménages
-		ask cell_env {			
+		write "intialisation des menages";
+		ask cell_env overlapping bangkhutien{			
 			// Création des ménages
 			//write "début création des ménages";
 			loop while: men_sdf >= 1 {
@@ -173,16 +210,40 @@ global {
 		}
 		
 		// Création de bâtiments
-		loop g over:espace_libre_total.geometries  {
-			list<batiment> bats;
-			list<geometry> decomp <- g to_squares(TAILLE_CARRE_GRAINES);
-			loop carre over: decomp  {
-				do creer_bati_proche_route(carre, bats); 
+		write "Création des bâtiments";
+		cp <- 0;
+		float min_size <- min([TAILLE_BAT_LARG, TAILLE_BAT_LONG]);
+		list<geometry> tot_geoms <- espace_libre_total.geometries where (each.area > (TAILLE_BAT_LARG * TAILLE_BAT_LONG) and each.width > min_size and each.height > min_size);
+		tot_geoms <- tot_geoms sort_by (- each.area);
+		loop g over:  tot_geoms{
+			
+			//write "zone: " + cp + "/" + length(tot_geoms) + " - " + g.area;
+			list<geometry> gs <- [];
+			if (g.area > 100000) {
+				gs <- g to_squares(500.0);
+			} else {
+				gs << g;
 			}
-			list<batiment> nouveaux_bats <- copy(bats);
-			loop while: not empty(bats) {
-				do creer_batiment_contigu(bats,g, nouveaux_bats);
+			loop g2 over: gs {
+				loop g3 over: g2.geometries {
+					if (g3.area > (TAILLE_BAT_LARG * TAILLE_BAT_LONG) and g3.width > min_size and g3.height > min_size) {
+						if (length(g3.geometries) > 1) {g3 <- g3.geometries with_max_of (each.area);}
+						int nb_habs <- sum((cell_env overlapping g3) collect each.men_resid);
+						if (nb_habs > 0) {
+							list<batiment> bats;
+							list<geometry> decomp <- g3 to_squares(TAILLE_CARRE_GRAINES);
+							loop carre over: decomp  {
+								do creer_bati_proche_route(carre, bats); 
+							}
+							list<batiment> nouveaux_bats <- copy(bats);
+							loop while: not empty(bats) {
+								do creer_batiment_contigu(bats,g3, nouveaux_bats);
+							}
+						}
+					}
+				}	
 			}
+			cp <- cp + 1;
 		}
 		
 		ask batiment {
@@ -190,9 +251,10 @@ global {
 		}
 		int cpt_bat <- 0;
 		ask cell_env {
-			batiments_voisins <- batiment at_distance N_CELL_BAT_VOISINS; //Récupération des batiments voisins et des bâtiments de la cellule pour le logement des ménages
+			batiments_voisins <- ((self neighbors_at N_CELL_BAT_VOISINS) + self) accumulate each.mes_batiments; //Récupération des batiments voisins et des bâtiments de la cellule pour le logement des ménages	
 		}
 		// Logement des ménages
+		write "logement des ménages";
 		ask menage {
 			list<batiment> bat_inhabites <- ma_cell_env.mes_batiments where (length(each.mes_menages_batiment) = 0); // Liste de bâtiments inhabités dans le voisinage)
 			list<batiment> bat_inhabites_voisins <- ma_cell_env.batiments_voisins where (length(each.mes_menages_batiment) = 0); // Liste de bâtiments inhabités dans le voisinage)
@@ -230,10 +292,17 @@ global {
 					
 				}
 			}
-			ma_cell_env <- mon_batiment.cell_env_batiment;
-			add self to: self.ma_cell_env.mes_menages;
-			mon_batiment.mes_menages_batiment << self;
-			mon_batiment.n_etages <- mon_batiment.n_etages + 1;
+			if (mon_batiment = nil) {
+				if (ma_cell_env != nil) {ma_cell_env.mes_menages >> self;}
+				do die;
+			} 
+			else {
+				ma_cell_env <- mon_batiment.cell_env_batiment;
+				add self to: self.ma_cell_env.mes_menages;
+				mon_batiment.mes_menages_batiment << self;
+				mon_batiment.n_etages <- mon_batiment.n_etages + 1;
+			}
+			
 		}
 		
 		int cpt_inhab <- 0;
@@ -247,7 +316,7 @@ global {
 		write 'Le nb de bâtiment(s) non habité(s) est de ' + cpt_inhab;
 		//Calcul du nombre de GLP par cell_env
 
-		
+		write "Initialisation des gites";
 		ask cell_env {
 			// Actualisation du nombre de ménages et d'habitants de chaque cellule
 			int n_membres_men_cell_env;
@@ -277,25 +346,122 @@ global {
 			n_glp_ext <- n_glp_esp_non_bati_u + int((men_resid * n_glp_men_intext_a) * (1 - ratio_glp_int)) + glp_prod_vois;
 		}
 		// Sauvegarde des données initialisée
-		save batiment to: batiments_sortie type: "shp" with: [n_etages::"n_etages", n_menages::"n_menages", n_glp_int::"n_glp_int"];
-		save cell_env to: cell_env_sortie type: "shp" with: [ndvi::"ndvi", proba_bati::"proba_bati", bati::"est_construc", n_glp_ext::"n_glp_ext"];
+		//save batiment to: batiments_sortie type: "shp" with: [n_etages::"n_etages", n_menages::"n_menages", n_glp_int::"n_glp_int"];
+		//save cell_env to: cell_env_sortie type: "shp" with: [ndvi::"ndvi", proba_bati::"proba_bati", bati::"est_construc", n_glp_ext::"n_glp_ext"];
+		
+		// Comparaison estimé / observé
+		create batiment_obs from: shp_bat_bangkhutien;
+		list<geometry> grid_valid <- bangkhutien to_squares(RES_GRID_VALID); // Création de la grille de référence pour comparaison au sein de chaque celle de cette grille
+		
+		matrix mat_results;
+		int cpt_results <- 1;
+		
+		list<geometry> bati_est_cell <- batiment overlapping bangkhutien;
+		list<geometry> bati_obs_cell <- batiment_obs overlapping bangkhutien;
+		geometry bati_est_cell_tot <- union(bati_est_cell);
+		geometry bati_obs_cell_tot <- union(bati_obs_cell);
+		
+		
+		int n_est <- length(bati_est_cell);
+		int n_obs <- length(bati_obs_cell);
+		float aire_est <- bati_est_cell sum_of(each.area);
+		float aire_obs <- bati_obs_cell sum_of(each.area);
+		write "Aire est. = " + aire_est + " | Aire obs. = " + aire_obs;
+		write "Nb est. = " + n_est + " | Nb obs. = " + n_obs;
+		
+		if (n_est > 0 and n_obs > 0) {
+			write "Il y a des batiments EST et OBS";
+			// Calcul des ratios de concordances
+			write "Début de la comparaison des bat EST";
+			list<geometry> bati_est_cell_buff <- bati_est_cell collect (each + BUFFER_VALID);
+			int n_bat_est_inter <- 0;
+			float n_bat_est_inter_pond <- 0.0;
+			
+			loop bat over: bati_est_cell_buff {
+				if (bat intersects bati_obs_cell_tot){
+					// Calcul du ratio normal pour les EST
+					n_bat_est_inter <- n_bat_est_inter + 1;
+					n_bat_est_inter_pond <- n_bat_est_inter_pond + 1;
+				} else {
+					// Prise en compte de la distance pour le ratio pondéré par la distance pour les EST
+					float dist <- bat distance_to bati_obs_cell_tot;
+					if (dist < dist_valid_max) {
+						float ratio <- 1 - (dist / dist_valid_max);
+						n_bat_est_inter_pond <- n_bat_est_inter_pond + ratio;
+					}
+				}
+			}
+			
+			write "Début de la comparaison des bat OBS";	
+			list<geometry> bati_obs_cell_buff <- bati_obs_cell collect (each + BUFFER_VALID);
+			int n_bat_obs_inter <- 0;
+			float n_bat_obs_inter_pond <- 0.0;
+			loop bat over: bati_obs_cell_buff {
+				if (bat intersects bati_est_cell_tot){
+					// Calcul du ratio normal pour les OBS
+					n_bat_obs_inter <- n_bat_obs_inter + 1;
+					n_bat_obs_inter_pond <- n_bat_obs_inter_pond + 1;
+				} else {
+					// Prise en compte de la distance pour le ratio pondéré par la distance pour les OBS
+					float dist <- bat distance_to bati_est_cell_tot;
+					if (dist < dist_valid_max) {
+						float ratio <- 1 - (dist / dist_valid_max);
+						n_bat_obs_inter_pond <- n_bat_obs_inter_pond + ratio;
+					}
+				}
+			}
+			write "Inscription des résultats";	
+			// Inscription des resultats
+			mat_results[cpt_results,1] <- cpt_results;
+			mat_results[cpt_results,2] <- n_est;
+			mat_results[cpt_results,3] <- n_obs;
+			mat_results[cpt_results,4] <- aire_est;
+			mat_results[cpt_results,5] <- aire_obs;
+			mat_results[cpt_results,6] <- n_bat_est_inter_pond / n_est;
+			mat_results[cpt_results,7] <- n_bat_est_inter_pond / n_est;
+			mat_results[cpt_results,8] <- n_bat_obs_inter_pond / n_obs;
+			mat_results[cpt_results,9] <- n_bat_obs_inter_pond / n_obs;		
+		} else {
+			// Inscription des resultats si jamais il n'y a pas de bâtiments observés ou de bâtiments estimés
+			mat_results[cpt_results,1] <- cpt_results;
+			mat_results[cpt_results,2] <- n_est;
+			mat_results[cpt_results,3] <- n_obs;
+			mat_results[cpt_results,4] <- aire_est;
+			mat_results[cpt_results,5] <- aire_obs;
+			mat_results[cpt_results,6] <- 0;
+			mat_results[cpt_results,7] <- 0;
+			mat_results[cpt_results,8] <- 0;
+			mat_results[cpt_results,9] <- 0;		
+		}		
+			// Calcul du nb et de l'aire des bat de chaque cell
 
+			
+
+			// S'il y a des bâtiments on calcul les ratio
+
+		write "resultats nuls " + cpt_results;
+		
+		save mat_results to: "../results/results_valid.csv" type: "csv";
+		write "Fin du modèle";
 	}
 
 	action creer_bati_proche_route(geometry carre, list<batiment> bats) {
+		float larg <- TAILLE_BAT_LARG;
+		float long <- TAILLE_BAT_LONG;
 		if (SCENARIO_BATIMENT = 2) {
-			float mean_nmen <- mean((cell_env overlapping carre) collect (float(each.men_resid)));
+			list<cell_env> cs <- (cell_env overlapping carre);
+			float mean_nmen <- empty(cs) ? 0.0 : mean(cs collect (float(each.men_resid)));
 			float aire_bat <- INTERCEPT_TAILLE_BAT + (COEF_TAILLE_BAT * mean_nmen);
-			float ratio_tbat <- rnd(1,RATIO_TBAT_MAX);
-			TAILLE_BAT_LARG <- sqrt(aire_bat * ratio_tbat);
-			TAILLE_BAT_LONG <- aire_bat / TAILLE_BAT_LARG;
+			float ratio_tbat <- rnd(1.0,RATIO_TBAT_MAX);
+			larg <- sqrt(aire_bat * ratio_tbat);
+			long <- aire_bat / larg;
 		} 
-		geometry possible_surface <- (carre - TAILLE_BAT_LONG);
+		geometry possible_surface <- (carre - long);
 		if ((possible_surface != nil) and possible_surface.area > 0) {
-			point loc <- any_location_in(carre - TAILLE_BAT_LONG);
+			point loc <- any_location_in(carre - long);
 			cell_env loc_cell_env <- cell_env closest_to loc;
-			if (loc distance_to espace_non_bati > TAILLE_BAT_LONG) and empty(batiment overlapping (rectangle(TAILLE_BAT_LONG, TAILLE_BAT_LARG) at_location loc)) {
-				create batiment with: [shape::rectangle(TAILLE_BAT_LONG,TAILLE_BAT_LARG), location::loc, color:: (rgb(80,80,80)), n_etages::0, cell_env_batiment::loc_cell_env] {
+			if (loc distance_to espace_non_bati > long) and empty(batiment overlapping (rectangle(long, larg) at_location loc)) {
+				create batiment with: [shape::rectangle(long,larg), location::loc, color:: (rgb(80,80,80)), n_etages::0, cell_env_batiment::loc_cell_env] {
 					route route_proche <- route closest_to self;
 					float dist <- route_proche distance_to self;
 					if (dist < largeur_espace_proche_route) {do alignement;}
@@ -308,10 +474,10 @@ global {
 	action creer_batiment_contigu(list<batiment> batiments, geometry  g, list<batiment> nouveaux_bats){
 		batiment bat_proche <- one_of(batiments);
 		batiments >> bat_proche;
-	
 		list<geometry> murs <- [];
 		loop i from: 0 to:length(bat_proche.shape.points) -2 {
-			murs << line([bat_proche.shape.points[i],bat_proche.shape.points[i+1]]);
+			geometry li <- line([bat_proche.shape.points[i],bat_proche.shape.points[i+1]]);
+			if (li != nil and (li.perimeter > 0)) {murs << li;}
 		}
 		list<route> routes <-[];
 		ask bat_proche {
@@ -320,17 +486,23 @@ global {
 		
 		loop mur over: murs {
 			geometry bat_geom <- copy(bat_proche.shape) translated_by (mur.points[1] - mur.points[0]);
-			bool deja_pris <- false;
-			loop b over: nouveaux_bats overlapping bat_geom  { 
-				if ((b inter bat_geom).area > 0.1) {deja_pris <- true; break;} //le 0.1 c'est une tolérance (surface acceptée de superposition entre 2 batiments)
-			}
-			if ((not deja_pris) and ( g covers bat_geom) and empty(routes overlapping bat_geom)) {
-				cell_env loc_cell_env <- cell_env closest_to bat_geom;
-				create batiment with:[shape::bat_geom, color:: rgb(100,100,100), n_etages::0, cell_env_batiment::loc_cell_env] {
-					batiments << self;
-					nouveaux_bats << self;
+			if (bat_geom != nil and bat_geom.area > 0 ) {
+				if (length(bat_geom.geometries) > 1) {bat_geom <- bat_geom.geometries with_max_of (each.area);}
+						
+				bool deja_pris <- false;
+				loop b over: (nouveaux_bats overlapping bat_geom)  { 
+					geometry it <- (b inter bat_geom);
+					if (it != nil and ((b inter bat_geom).area > 0.1)) {deja_pris <- true; break;} //le 0.1 c'est une tolérance (surface acceptée de superposition entre 2 batiments)
+				}
+				if ((not deja_pris) and (bat_geom intersects world) and ( g covers bat_geom) and empty(routes overlapping bat_geom)) {
+					cell_env loc_cell_env <- cell_env (bat_geom.location);
+					create batiment with:[shape::bat_geom, color:: rgb(100,100,100), n_etages::0, cell_env_batiment::loc_cell_env] {
+						batiments << self;
+						nouveaux_bats << self;
+					}
 				}
 			}
+			
 		}
 	}
 }
@@ -408,7 +580,7 @@ grid cell_ndvi file: grid_ndvi use_regular_agents: false use_individual_shapes: 
 
 grid cell_proba_bati file: grid_proba_bati use_regular_agents: false use_individual_shapes: false schedules: [];
 
-grid cell_ggmap file: grid_ggmap use_regular_agents: false use_individual_shapes: false schedules: [] {
+/*grid cell_ggmap file: grid_ggmap use_regular_agents: false use_individual_shapes: false use_neighbors_cache: false schedules: [] {
 	int occsol;
 	rgb color;
 	float transparency_ggmap;
@@ -426,7 +598,7 @@ grid cell_ggmap file: grid_ggmap use_regular_agents: false use_individual_shapes
 			}
 		}
 	}
-}
+}*/
 
 species ggmap_display {
 	int occsol;
@@ -511,6 +683,13 @@ species batiment frequency: 1 {
 	}
 }
 
+species batiment_obs {
+	aspect base {
+		draw shape color: #red border: #red;
+	}
+}
+
+
 experiment genmicro type: gui {
 	output {
 		display main_display type: opengl {
@@ -524,7 +703,38 @@ experiment genmicro type: gui {
             //graphics "espace_libre_proche_route" {draw espace_libre_loin_routes color: #red;}
             //graphics "zone_proche_routes" transparency:0.9 {draw zone_proche_routes color:#red;}
 			//species route aspect: base;
-			species batiment aspect: base;
+			//species batiment aspect: base;
+			species batiment_obs aspect: base;
 		}
 	}
 }
+
+experiment batch type: batch until: cycle =2 repeat: 12 keep_seed:true {
+	parameter SCENARIO_BATIMENT var:SCENARIO_BATIMENT among:[1,2];
+	parameter SCENARIO_MENAGE var:SCENARIO_MENAGE among:[2,3,1];
+}
+
+experiment openmole keep_seed:true {
+	//parameter largeur_chaussee var:largeur_chaussee; // among:[4:6] by: 0.5
+	//parameter largeur_espace_proche_route var: largeur_espace_proche_route; //among[100:300] by:50 
+	//parameter max_nhab_menage var: max_nhab_menage; //among[:] by:  --> Pas a calibrer
+	//parameter lambda_nhab_menage  var: lambda_nhab_menage; //among[2:4] by: 0.5
+	parameter flip_proche_route var: flip_proche_route; //among[0.5:0.9] by: 0.1 
+	//parameter TOL_ESPACE_NON_BATI var: TOL_ESPACE_NON_BATI; //among[:] by:  --> Pas a calibrer
+	//parameter BUF_ESPACE_NON_BATI var: BUF_ESPACE_NON_BATI; //among[:] by:  --> Pas a calibrer
+	//parameter TAILLE_BAT_LONG var: TAILLE_BAT_LONG; //among[10:15] by: 1
+	//parameter TAILLE_BAT_LARG var: TAILLE_BAT_LARG; //among[10:15] by: 1
+	//parameter SCENARIO_BATIMENT var:SCENARIO_BATIMENT; // among:[1,2] by: 1
+	//parameter INTERCEPT_TAILLE_BAT var: INTERCEPT_TAILLE_BAT; //among[:] by:   --> Pas a calibrer
+	//parameter COEF_TAILLE_BAT var: COEF_TAILLE_BAT; //among[:] by:   --> Pas a calibrer
+	//parameter RATIO_TBAT_MAX var: RATIO_TBAT_MAX; //among[:] by:   --> Pas a calibrer
+	parameter TAILLE_CARRE_GRAINES var: TAILLE_CARRE_GRAINES; //among[30:80] by: 10   
+	parameter N_CELL_BAT_VOISINS var: N_CELL_BAT_VOISINS; //among[1:10] by: 1
+	//parameter SCENARIO_MENAGE var:SCENARIO_MENAGE; // among:[1,2,3] by: 1
+	//parameter RATIO_GLP_INT_MAX var: RATIO_GLP_INT_MAX; //among[:] by:    --> Pas a calibrer
+	//parameter RATIO_GLP_INT_MIN var: RATIO_GLP_INT_MIN; //among[:] by:    --> Pas a calibrer
+	//parameter LAMBDA_GLP_ESP_NON_BATIS_U var: LAMBDA_GLP_ESP_NON_BATIS_U; //among[:] by:    --> Pas a calibrer
+	//parameter LAMBDA_GLP_MEN_INTEXT_A var: LAMBDA_GLP_MEN_INTEXT_A; //among[:] by:   --> Pas a calibrer
+	//parameter LAMBDA_GLP_VOIS_EXT_B var: LAMBDA_GLP_VOIS_EXT_B; //among[:] by:    --> Pas a calibrer
+}
+
