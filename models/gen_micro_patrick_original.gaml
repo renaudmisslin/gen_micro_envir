@@ -59,10 +59,10 @@ global {
 	file grid_ndvi <- file('../data_micro/ndvi_zone.tif');
 	file grid_proba_bati <- file('../data_micro/dist_raster_zone.tif');
 	//file grid_ggmap <- file('../data_micro/extract_ggmap_zone.tif');
-	file shp_routes <- file('../data_micro/routes_zone_calib_part2.shp');
+	file shp_routes <- file('../data_micro/routes_zone_calib_part1.shp');
 	file shp_ggmap <- file('../data_micro/routes_canaux_diss.shp');
-	file shp_zone <- file('../includes/bangkhutien_zone_calib_part2.shp');
-	file shp_bat_bangkhutien <- file('../includes/bldg_bangkhuntien_calib_part2.shp');
+	file shp_zone <- file('../includes/bangkhutien_zone_calib_part1.shp');
+	file shp_bat_bangkhutien <- file('../includes/bldg_bangkhuntien_calib_part1.shp');
 	
 	// Fichiers de sortie
 	string sim_id <- "_SM_" + SCENARIO_MENAGE + "-SB_" + SCENARIO_BATIMENT+ "-" + seed;
